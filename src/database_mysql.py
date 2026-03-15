@@ -119,3 +119,46 @@ class DatabaseManager:
 
         self.cursor.execute(query, values)
         self.conn.commit()
+
+    def update_content_features(self, url, features):
+
+        query = """
+        UPDATE websites
+        SET
+        text_length = %s,
+        token_count = %s,
+        scam_keyword_count = %s,
+        scam_keyword_density = %s
+        WHERE url = %s
+        """
+
+        values = (
+            features["text_length"],
+            features["token_count"],
+            features["scam_keyword_count"],
+            features["scam_keyword_density"],
+            url
+        )
+
+        self.cursor.execute(query, values)
+        self.conn.commit()
+
+    def get_all_rows(self):
+
+        query = "SELECT url, title, text_content FROM websites"
+
+        self.cursor.execute(query)
+
+        rows = self.cursor.fetchall()
+
+        result = []
+
+        for row in rows:
+
+            result.append({
+                "url": row[0],
+                "title": row[1],
+                "text_content": row[2]
+            })
+
+        return result
