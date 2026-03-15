@@ -94,3 +94,28 @@ class DatabaseManager:
         self.cursor.execute(query, values)
 
         self.conn.commit()
+
+    def update_domain_features(self, url, features):
+
+        query = """
+        UPDATE websites
+        SET
+        domain_age_days=%s,
+        domain_expiry_days=%s,
+        registrar=%s,
+        has_ssl=%s,
+        ssl_valid=%s
+        WHERE url=%s
+        """
+
+        values = (
+            features["domain_age_days"],
+            features["domain_expiry_days"],
+            features["registrar"],
+            features["has_ssl"],
+            features["ssl_valid"],
+            url
+        )
+
+        self.cursor.execute(query, values)
+        self.conn.commit()
