@@ -14,6 +14,7 @@ class DatabaseManager:
 
         self.cursor = self.conn.cursor()
 
+
     def insert_website(self, url, data, features):
 
         query = """

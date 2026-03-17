@@ -1,7 +1,5 @@
 import pandas as pd
 from src.database_mysql import DatabaseManager
-from src.tfidf_vectorizer import TFIDFFeatureExtractor
-
 
 db = DatabaseManager()
 
@@ -22,7 +20,8 @@ ssl_valid,
 text_length,
 token_count,
 scam_keyword_count,
-scam_keyword_density
+scam_keyword_density,
+label
 FROM websites
 """
 
@@ -32,16 +31,11 @@ rows = db.cursor.fetchall()
 
 data = []
 
-texts = []
-
 for row in rows:
-
-    text = row[1] if row[1] else ""
-
-    texts.append(text)
 
     data.append({
         "url": row[0],
+        "text_content" : row[1] if row[1] else "",
         "url_length": row[2],
         "num_dots": row[3],
         "num_hyphen": row[4],
@@ -55,29 +49,15 @@ for row in rows:
         "text_length": row[12],
         "token_count": row[13],
         "scam_keyword_count": row[14],
-        "scam_keyword_density": row[15]
+        "scam_keyword_density": row[15],
+        "label" : row[16]
     })
 
 
 # convert to dataframe
-df_features = pd.DataFrame(data)
-
-
-# TF-IDF
-tfidf = TFIDFFeatureExtractor()
-
-tfidf_matrix = tfidf.fit_transform(texts)
-
-tfidf_df = pd.DataFrame(
-    tfidf_matrix.toarray(),
-    columns=tfidf.get_feature_names()
-)
-
-# combine all features
-final_dataset = pd.concat([df_features, tfidf_df], axis=1)
-
+df = pd.DataFrame(data)
 
 # save dataset
-final_dataset.to_csv("ml_project_dataset.csv", index=False)
+df.to_csv("./dataset/ml_project_dataset.csv", index=False)
 
-print("ML dataset created: ml__project_dataset.csv")
+print("Dataset created successfully")

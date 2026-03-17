@@ -6,7 +6,7 @@ class TFIDFFeatureExtractor:
     def __init__(self):
 
         self.vectorizer = TfidfVectorizer(
-            max_features=100,
+            max_features=130,
             stop_words="english",
             max_df=0.85,
             min_df=2,
