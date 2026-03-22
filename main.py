@@ -14,6 +14,9 @@ db = DatabaseManager()
 
 url = input("Enter website URL: ")
 
+if not url.startswith("http"):
+    utl = "https://" + url
+
 data = scraper.scrape(url)
 features = feature_extractor.extract(url)
 domain_features = domain_extractor.extract(url)

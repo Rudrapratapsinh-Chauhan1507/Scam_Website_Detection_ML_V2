@@ -6,10 +6,10 @@ from src.url_features import URLFeatureExtractor
 from src.domain_features import DomainFeatureExtractor
 from src.content_features import ContentFeatureExtractor
 
-model = joblib.load("scam_detector_model.pkl")
-feature_columns = joblib.load("feature_columns.pkl")
-tfidf = joblib.load("tfidf_vectorizer.pkl")
-scaler = joblib.load("scaler.pkl")
+model = joblib.load("./pkl_models/scam_detector_model.pkl")
+feature_columns = joblib.load("./pkl_models/feature_columns.pkl")
+tfidf = joblib.load("./pkl_models/tfidf_vectorizer.pkl")
+scaler = joblib.load("./pkl_models/scaler.pkl")
 
 url = input("Enter URL: ")
 

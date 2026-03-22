@@ -83,10 +83,10 @@ print(classification_report(y_test, y_pred_rf))
 print("\nRF ROC AUC Score:")
 print(roc_auc_score(y_test, model_rf.predict_proba(X_test)[:,1]))
 
-joblib.dump(tfidf, "tfidf_vectorizer.pkl")
-joblib.dump(model_rf, "scam_detector_model.pkl")
-joblib.dump(X.columns.tolist(), "feature_columns.pkl")
-joblib.dump(scaler, "scaler.pkl")
+joblib.dump(tfidf, "./pkl_models/tfidf_vectorizer.pkl")
+joblib.dump(model_rf, "./pkl_models/scam_detector_model.pkl")
+joblib.dump(X.columns.tolist(), "./pkl_models/feature_columns.pkl")
+joblib.dump(scaler, "./pkl_models/scaler.pkl")
 
 print("\nModel and feature columns saved successfully.")
 
