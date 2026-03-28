@@ -1,63 +1,76 @@
+import os
 import pandas as pd
 from src.database_mysql import DatabaseManager
 
-db = DatabaseManager()
-
-query = """
+QUERY = """
 SELECT
-url,
-text_content,
-url_length,
-num_dots,
-num_hyphen,
-num_slashes,
-https,
-subdomains,
-has_at_symbol,
-has_ip,
-has_ssl,
-ssl_valid,
-text_length,
-token_count,
-scam_keyword_count,
-scam_keyword_density,
-label
+    url,
+    text_content,
+    url_length,
+    num_dots,
+    num_hyphen,
+    num_slashes,
+    https,
+    subdomains,
+    has_at_symbol,
+    has_ip,
+    num_underscores,
+    num_percent,
+    num_digits,
+    num_query_params,
+    has_query,
+    path_depth,
+    suspicious_tld,
+    brand_in_url,
+    is_shortened,
+    has_ssl,
+    ssl_valid,
+    ssl_days_remaining,
+    is_new_domain,
+    domain_age_days,
+    domain_expiry_days,
+    text_length,
+    token_count,
+    scam_keyword_count,
+    scam_keyword_density,
+    has_form,
+    has_iframe,
+    exclamation_count,
+    caps_ratio,
+    label
 FROM websites
+WHERE label IS NOT NULL
 """
 
-db.cursor.execute(query)
+OUTPUT_PATH = "./dataset/ml_project_dataset.csv"
 
-rows = db.cursor.fetchall()
+os.makedirs("dataset", exist_ok=True)
 
-data = []
+db = DatabaseManager()
+db._execute.__func__  # warm up pool
 
-for row in rows:
+rows = db._execute(QUERY, fetch="all")
 
-    data.append({
-        "url": row[0],
-        "text_content" : row[1] if row[1] else "",
-        "url_length": row[2],
-        "num_dots": row[3],
-        "num_hyphen": row[4],
-        "num_slashes": row[5],
-        "https": row[6],
-        "subdomains": row[7],
-        "has_at_symbol": row[8],
-        "has_ip": row[9],
-        "has_ssl": row[10],
-        "ssl_valid": row[11],
-        "text_length": row[12],
-        "token_count": row[13],
-        "scam_keyword_count": row[14],
-        "scam_keyword_density": row[15],
-        "label" : row[16]
-    })
+columns = [
+    "url", "text_content",
+    "url_length", "num_dots", "num_hyphen", "num_slashes",
+    "https", "subdomains", "has_at_symbol", "has_ip",
+    "num_underscores", "num_percent", "num_digits",
+    "num_query_params", "has_query", "path_depth",
+    "suspicious_tld", "brand_in_url", "is_shortened",
+    "has_ssl", "ssl_valid", "ssl_days_remaining", "is_new_domain",
+    "domain_age_days", "domain_expiry_days",
+    "text_length", "token_count",
+    "scam_keyword_count", "scam_keyword_density",
+    "has_form", "has_iframe", "exclamation_count", "caps_ratio",
+    "label",
+]
 
+df = pd.DataFrame(rows, columns=columns)
+df["text_content"] = df["text_content"].fillna("")
 
-# convert to dataframe
-df = pd.DataFrame(data)
+print(f"Rows exported : {len(df)}")
+print(f"Label counts  :\n{df['label'].value_counts()}\n")
 
-# save dataset
-df.to_csv("./dataset/ml_project_dataset.csv", index=False)
-
-print("Dataset created successfully")
+df.to_csv(OUTPUT_PATH, index=False)
+print(f"[OK] Dataset saved to {OUTPUT_PATH}")
