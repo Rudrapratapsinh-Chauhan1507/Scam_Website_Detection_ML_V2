@@ -1,3 +1,4 @@
+import re
 import joblib
 import numpy as np
 import pandas as pd
@@ -5,106 +6,161 @@ from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.exceptions import NotFittedError
 
+# Module-level constants — avoids class-scope reference issues in __init__
+_TOKEN_PAT     = re.compile(r"\b[a-z0-9][a-z0-9]+\b", re.ASCII)
+_TOKEN_PAT_STR = r"\b[a-z0-9][a-z0-9]+\b"
+
 
 class TFIDFFeatureExtractor:
     """
-    Wrapper around sklearn's TfidfVectorizer with:
-      - Safe transform (checks fitted state)
-      - sublinear_tf for better term weighting
-      - save / load helpers
-      - direct DataFrame output option
+    TF-IDF feature extractor with robust cleaning, safe fit/transform,
+    and save/load support.
     """
 
     def __init__(
         self,
-        max_features: int = 100,
-        ngram_range: tuple = (1, 2),
-        max_df: float = 0.85,
-        min_df: int = 1,          # 1 instead of 2 — safe for small datasets
-        sublinear_tf: bool = True, # log-scale TF to reduce dominance of frequent words
+        max_features: int = 1200,
+        max_df: float = 0.95,
+        min_df: int = 1,
+        sublinear_tf: bool = True,
     ):
         self.vectorizer = TfidfVectorizer(
             max_features=max_features,
-            stop_words="english",
             max_df=max_df,
             min_df=min_df,
-            ngram_range=ngram_range,
             sublinear_tf=sublinear_tf,
-            strip_accents="unicode",
+            strip_accents=None,        # avoid Unicode normalizer mangling clean ASCII text
             analyzer="word",
+            ngram_range=(1, 2),
+            stop_words=None,
+            lowercase=False,           # _clean() already lowercases; skip sklearn's unicode path
+            norm="l2",
+            dtype=np.float32,
+            token_pattern=_TOKEN_PAT_STR,
         )
         self._is_fitted = False
+        self._feature_names = []
 
-    # core methods
+    # ----------------------------------------
+    # CORE METHODS
+    # ----------------------------------------
 
-    def fit_transform(
-        self, texts: list[str], as_dataframe: bool = False
-    ) -> np.ndarray | pd.DataFrame:
-        """Fit on texts and return transformed matrix."""
+    def fit_transform(self, texts, as_dataframe: bool = False):
+        """Fit the vectorizer on texts and return the feature matrix."""
         cleaned = self._clean(texts)
+        cleaned = [t[:5000] for t in cleaned]
+
+        non_empty = [t for t in cleaned if t.strip() and t != "empty_doc"]
+        if not non_empty:
+            raise ValueError(
+                "All input texts are empty after cleaning. "
+                "Check your text_content column — it may be all URLs/HTML/numbers."
+            )
+
+        # Diagnostic (re.ASCII flag is Python 3.12 safe)
+        sample_tokens = _TOKEN_PAT.findall(cleaned[0])
+        total_tokens  = sum(len(_TOKEN_PAT.findall(t)) for t in cleaned)
+        print(f"[TF-IDF] Sample tokens (doc 0): {sample_tokens[:10]}")
+        print(f"[TF-IDF] Total tokens across train set: {total_tokens}")
+
+        if total_tokens == 0:
+            raise ValueError(
+                "Token pattern matched 0 tokens. "
+                f"First doc bytes: {cleaned[0].encode()[:100]}"
+            )
+
         matrix = self.vectorizer.fit_transform(cleaned)
         self._is_fitted = True
+        self._feature_names = self.vectorizer.get_feature_names_out()
+        print(f"[TF-IDF] Vocabulary size: {len(self._feature_names)}")
 
         if as_dataframe:
             return pd.DataFrame(
                 matrix.toarray(),
-                columns=self.vectorizer.get_feature_names_out(),
+                columns=[f"tfidf_{f}" for f in self._feature_names],
             )
         return matrix
 
-    def transform(
-        self, texts: list[str], as_dataframe: bool = False
-    ) -> np.ndarray | pd.DataFrame:
-        """Transform new texts using the already-fitted vectorizer."""
+    def transform(self, texts, as_dataframe: bool = False):
+        """Transform texts using the already-fitted vectorizer."""
         self._check_fitted()
+
         cleaned = self._clean(texts)
+        cleaned = [t[:5000] for t in cleaned]
+
         matrix = self.vectorizer.transform(cleaned)
 
         if as_dataframe:
             return pd.DataFrame(
                 matrix.toarray(),
-                columns=self.vectorizer.get_feature_names_out(),
+                columns=[f"tfidf_{f}" for f in self._feature_names],
             )
         return matrix
 
-    def get_feature_names(self) -> list[str]:
-        """Return list of feature (token) names."""
+    # ----------------------------------------
+    # CLEANING
+    # ----------------------------------------
+
+    @staticmethod
+    def _clean(texts) -> list[str]:
+        """
+        Clean raw texts:
+          - Lowercase
+          - Strip URLs, HTML tags
+          - Keep ASCII letters + digits only
+          - Encode/decode ASCII to strip hidden Unicode/BOM characters
+          - Collapse whitespace
+          - Fallback to 'empty_doc' so the vectorizer never sees a blank row
+        """
+        result = []
+        for t in texts:
+            t = str(t).lower().strip() if t is not None else ""
+            t = re.sub(r"http\S+",     " ", t)   # remove URLs
+            t = re.sub(r"<[^>]+>",     " ", t)   # remove HTML tags
+            t = re.sub(r"[^a-z0-9\s]", " ", t)   # keep ASCII letters + digits
+            t = re.sub(r"\s+",         " ", t).strip()
+            t = t.encode("ascii", errors="ignore").decode("ascii")  # strip hidden Unicode/BOM
+            result.append(t if t else "empty_doc")
+        return result
+
+    # ----------------------------------------
+    # VALIDATION
+    # ----------------------------------------
+
+    def _check_fitted(self):
+        if not self._is_fitted:
+            raise NotFittedError(
+                "TF-IDF vectorizer is not fitted yet. "
+                "Call fit_transform() before transform()."
+            )
+
+    @property
+    def vocabulary_size(self) -> int:
         self._check_fitted()
-        return self.vectorizer.get_feature_names_out().tolist()
+        return len(self._feature_names)
 
-    def vocab_size(self) -> int:
-        """Number of features learned."""
+    @property
+    def feature_names(self) -> list[str]:
         self._check_fitted()
-        return len(self.vectorizer.vocabulary_)
+        return list(self._feature_names)
 
-    # persistence
+    # ----------------------------------------
+    # SAVE / LOAD
+    # ----------------------------------------
 
-    def save(self, path: str = "./pkl_models/tfidf_vectorizer.pkl") -> None:
+    def save(self, path: str):
         """Save the fitted vectorizer to disk."""
         self._check_fitted()
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self.vectorizer, path)
-        print(f"[OK] TF-IDF vectorizer saved to {path}")
+        print(f"[TF-IDF] Saved vectorizer → {path}")
 
-    def load(self, path: str = "./pkl_models/tfidf_vectorizer.pkl") -> None:
+    def load(self, path: str):
         """Load a previously saved vectorizer from disk."""
         if not Path(path).exists():
             raise FileNotFoundError(f"No vectorizer found at: {path}")
         self.vectorizer = joblib.load(path)
+        self._feature_names = self.vectorizer.get_feature_names_out()
         self._is_fitted = True
-        print(f"[OK] TF-IDF vectorizer loaded from {path}  "
-              f"(vocab size: {len(self.vectorizer.vocabulary_)})")
-
-    # helpers
-
-    @staticmethod
-    def _clean(texts: list[str]) -> list[str]:
-        """Replace None / non-string entries with empty string."""
-        return [t if isinstance(t, str) else "" for t in texts]
-
-    def _check_fitted(self) -> None:
-        if not self._is_fitted:
-            raise NotFittedError(
-                "TFIDFFeatureExtractor is not fitted yet. "
-                "Call fit_transform() or load() first."
-            )
+        print(f"[TF-IDF] Loaded vectorizer from {path} "
+              f"(vocab size: {len(self._feature_names)})")

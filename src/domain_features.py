@@ -116,6 +116,11 @@ class DomainFeatureExtractor:
         features.update(self._run_whois(domain))
         features.update(self._check_ssl(domain))
 
+        expiry_days = features.get("domain_expiry_days")
+
+        features["short_expiry_domain"] = (
+            1 if (expiry_days is not None and expiry_days < 180) else 0
+        )
         # Derived flag: very new domains (< 180 days) are higher risk
         age = features.get("domain_age_days")
         features["is_new_domain"] = (

@@ -99,6 +99,7 @@ class WebsiteScraper:
                         # Force UTF-8 detection from content rather than header
                         resp.encoding = resp.apparent_encoding or "utf-8"
                         resp.final_url = resp.url
+                        resp.redirect_count = len(resp.history)
                         return resp
                 except requests.RequestException:
                     continue  # try next verify / next candidate
@@ -128,6 +129,7 @@ class WebsiteScraper:
             "title": title,
             "meta_description": meta_desc,
             "text": clean_text,
+            "html": html,
         }
 
     def scrape(self, url: str) -> dict:
@@ -163,6 +165,7 @@ class WebsiteScraper:
                 "meta_description": "",
                 "text": "",
                 "final_url": url,
+                "redirect_count": 0, 
                 "error": "Scraping blocked or failed"
             }
 
@@ -172,6 +175,7 @@ class WebsiteScraper:
             "status": "success",
             "error": None,
             "final_url": response.url,
+            "redirect_count": getattr(response, "redirect_count", 0),
             **parsed_content,
         }
 

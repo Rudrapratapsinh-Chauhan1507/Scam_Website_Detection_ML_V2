@@ -16,7 +16,7 @@ def _get_pool() -> pooling.MySQLConnectionPool:
             host="localhost",
             user="root",
             password="",
-            database="scam_detection",
+            database="scam_website_detection",
         )
     return _POOL
 
@@ -54,47 +54,41 @@ class DatabaseManager:
             conn.close()   # returns to pool
 
     # write methods
-
-    def insert_website(self, url: str, data: dict, features: dict) -> int | None:
-        """
-        Insert a new row.  Silently skips on duplicate URL.
-        Returns the new row's primary key, or None on duplicate.
-        """
+    def insert_website(self, url: str, data: dict) -> int | None:
         query = """
-            INSERT IGNORE INTO websites
-            (url, title, meta_description, text_content,
-             scraped_at, status, error_message,
-             url_length, num_dots, num_hyphen, num_slashes,
-             https, subdomains, has_at_symbol, has_ip)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            INSERT IGNORE INTO websites (
+                url, title, meta_description, text_content,
+                final_url, status, error_message,
+                redirect_count, scraped_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """
         values = (
             url,
             data.get("title"),
             data.get("meta_description"),
             data.get("text"),
-            datetime.now(),
+            data.get("final_url"),
             data.get("status"),
             data.get("error"),
-            features.get("url_length"),
-            features.get("num_dots"),
-            features.get("num_hyphen"),
-            features.get("num_slashes"),
-            features.get("https"),
-            features.get("subdomains"),
-            features.get("has_at_symbol"),
-            features.get("has_ip"),
+            data.get("redirect_count"),
+            datetime.now(),
         )
         return self._execute(query, values)
+    
+    def update_label(self, url: str, label: int) -> None:
+        query = "UPDATE websites SET label=%s WHERE url=%s"
+        self._execute(query, (label, url))
 
     def update_url_features(self, url: str, features: dict) -> None:
         query = """
             UPDATE websites
             SET url_length=%s, num_dots=%s, num_hyphen=%s, num_slashes=%s,
-                https=%s, subdomains=%s, has_at_symbol=%s, has_ip=%s,
+                https=%s, subdomains=%s, has_at_symbol=%s, has_double_slash=%s, has_ip=%s,
                 num_underscores=%s, num_percent=%s, num_digits=%s,
                 num_query_params=%s, has_query=%s, path_depth=%s,
-                suspicious_tld=%s, brand_in_url=%s, is_shortened=%s
+                suspicious_tld=%s, brand_in_url=%s, is_shortened=%s,
+                suspicious_word_count=%s
             WHERE url=%s
         """
         values = (
@@ -105,6 +99,7 @@ class DatabaseManager:
             features.get("https"),
             features.get("subdomains"),
             features.get("has_at_symbol"),
+            features.get("has_double_slash"),
             features.get("has_ip"),
             features.get("num_underscores"),
             features.get("num_percent"),
@@ -115,6 +110,7 @@ class DatabaseManager:
             features.get("suspicious_tld"),
             features.get("brand_in_url"),
             features.get("is_shortened"),
+            features.get("suspicious_word_count"),
             url,
         )
         self._execute(query, values)
@@ -124,7 +120,7 @@ class DatabaseManager:
             UPDATE websites
             SET domain_age_days=%s, domain_expiry_days=%s, registrar=%s,
                 has_ssl=%s, ssl_valid=%s, ssl_days_remaining=%s,
-                is_new_domain=%s
+                is_new_domain=%s, short_expiry_domain=%s
             WHERE url=%s
         """
         values = (
@@ -135,6 +131,7 @@ class DatabaseManager:
             features.get("ssl_valid"),
             features.get("ssl_days_remaining"),
             features.get("is_new_domain"),
+            features.get("short_expiry_domain"),
             url,
         )
         self._execute(query, values)
@@ -145,7 +142,8 @@ class DatabaseManager:
             SET text_length=%s, token_count=%s,
                 scam_keyword_count=%s, scam_keyword_density=%s,
                 has_form=%s, has_iframe=%s,
-                exclamation_count=%s, caps_ratio=%s
+                exclamation_count=%s, caps_ratio=%s,
+                avg_word_length=%s
             WHERE url=%s
         """
         values = (
@@ -157,6 +155,7 @@ class DatabaseManager:
             features.get("has_iframe"),
             features.get("exclamation_count"),
             features.get("caps_ratio"),
+            features.get("avg_word_length"),
             url,
         )
         self._execute(query, values)
@@ -175,9 +174,22 @@ class DatabaseManager:
         rows = self._execute("SELECT url FROM websites", fetch="all")
         return [r[0] for r in rows]
 
-    def get_all_rows(self) -> list[dict]:
+    def get_training_data(self) -> list[dict]:
         rows = self._execute(
-            "SELECT url, title, text_content FROM websites",
+            """
+            SELECT url, title, text_content, label
+            FROM websites
+            WHERE label IS NOT NULL
+            """,
             fetch="all",
         )
-        return [{"url": r[0], "title": r[1], "text_content": r[2]} for r in rows]
+
+        return [
+            {
+                "url": r[0],
+                "title": r[1],
+                "text": r[2],
+                "label": r[3],
+            }
+            for r in rows
+        ]

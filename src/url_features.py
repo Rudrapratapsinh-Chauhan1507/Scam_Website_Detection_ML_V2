@@ -69,6 +69,11 @@ class URLFeatureExtractor:
         # Shortening services
         shorteners = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "rb.gy"}
         features["is_shortened"] = 1 if netloc in shorteners else 0
-        features["short_url_risk"] = 1 if netloc in shorteners else 0
 
+        suspicious_words = ["login", "verify", "secure", "account", "update"]
+
+        features["suspicious_word_count"] = sum(
+            1 for word in suspicious_words if word in full_url
+        )
+        
         return features
