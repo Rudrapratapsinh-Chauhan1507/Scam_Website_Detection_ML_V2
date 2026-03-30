@@ -9,9 +9,7 @@ from src.url_features import URLFeatureExtractor
 from src.domain_features import DomainFeatureExtractor
 from src.content_features import ContentFeatureExtractor
 
-# -----------------------------
 # LOAD MODELS
-# -----------------------------
 MODEL_PATH = "./pkl_models"
 model = None
 tfidf = None
@@ -40,10 +38,7 @@ def load_artifacts():
     except:
         scaler = None
 
-
-# -----------------------------
 # FEATURE EXTRACTION
-# -----------------------------
 def extract_features(url: str):
     scraper = WebsiteScraper()
     data = scraper.scrape(url)
@@ -61,10 +56,7 @@ def extract_features(url: str):
 
     return features, data.get("text", "")
 
-
-# -----------------------------
 # BUILD FEATURE VECTOR
-# -----------------------------
 def build_feature_vector(struct_features: dict, text: str):
     df_struct = pd.DataFrame([struct_features])
     df_struct = df_struct.apply(pd.to_numeric, errors="coerce").fillna(0)
@@ -84,10 +76,7 @@ def build_feature_vector(struct_features: dict, text: str):
     df_final = df_final[all_columns]
     return df_final.values
 
-
-# -----------------------------
 # PREDICT
-# -----------------------------
 def predict(url: str):
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -98,29 +87,21 @@ def predict(url: str):
 
     domain = urlparse(url).netloc.lower()
 
-    # ----------------------------------------
     # TRUST SIGNALS (soft influence)
-    # ----------------------------------------
     trusted_keywords = [".edu", ".gov", ".ac.in", "bank", "university", "college"]
 
     struct_features, text = extract_features(url)
 
-    # ----------------------------------------
     # BUILD FEATURE VECTOR
-    # ----------------------------------------
     X = build_feature_vector(struct_features, text)
 
     if scaler is not None:
         X = scaler.transform(X)
 
-    # ----------------------------------------
     # MODEL PREDICTION
-    # ----------------------------------------
     proba = model.predict_proba(X)[0][1]
 
-    # ----------------------------------------
     # HYBRID ADJUSTMENTS (NO HARD OVERRIDE)
-    # ----------------------------------------
     adjustments = []
 
     # Domain age adjustment
@@ -144,9 +125,7 @@ def predict(url: str):
 
     # Clamp
     proba = max(0.0, min(1.0, proba))
-    # ----------------------------------------
     # FINAL DECISION
-    # ----------------------------------------
     if proba >= 0.85:
         label = "🚨 SCAM (HIGH RISK)"
     elif proba >= 0.65:
@@ -154,9 +133,7 @@ def predict(url: str):
     else:
         label = "✅ LEGIT"
 
-    # ----------------------------------------
     # OUTPUT
-    # ----------------------------------------
     print("\n===== RESULT =====")
     print(f"Prediction : {label}")
     print(f"Confidence : {proba:.4f}")
@@ -176,10 +153,7 @@ def predict(url: str):
 
     print("=" * 60)
 
-
-# -----------------------------
 # MAIN
-# -----------------------------
 if __name__ == "__main__":
     load_artifacts()
 

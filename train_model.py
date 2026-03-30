@@ -12,22 +12,16 @@ from sklearn.preprocessing import StandardScaler
 
 from src.tfidf_vectorizer import TFIDFFeatureExtractor
 
-# ----------------------------------------
 # CONFIG
-# ----------------------------------------
 DATA_PATH = "./dataset/Scam_website_dataset.csv"
 MODEL_DIR = "./pkl_models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# ----------------------------------------
 # LOAD DATA
-# ----------------------------------------
 df = pd.read_csv(DATA_PATH)
 print(f"[INFO] Dataset loaded: {df.shape}")
 
-# ----------------------------------------
 # TEXT CLEANING
-# ----------------------------------------
 def clean_text(text: str) -> str:
     text = str(text).lower()
     text = re.sub(r"http\S+", " ", text)
@@ -49,9 +43,7 @@ df["label"] = df["label"].astype(int)
 print(f"[INFO] Final dataset: {df.shape}")
 print(f"[INFO] Label distribution:\n{df['label'].value_counts()}")
 
-# ----------------------------------------
 # FEATURE PREP
-# ----------------------------------------
 drop_cols = [
     "url", "text_content", "label",
     "id", "title", "meta_description",
@@ -65,9 +57,7 @@ y = df["label"]
 
 X_struct = X_struct.apply(pd.to_numeric, errors="coerce").fillna(0)
 
-# ----------------------------------------
 # REMOVE LEAKAGE FEATURES
-# ----------------------------------------
 leak_cols = [
     "domain_age_days", "domain_expiry_days",
     "ssl_days_remaining", "short_expiry_domain", "is_new_domain"
@@ -82,9 +72,7 @@ X_struct.drop(columns=[
 
 struct_columns = list(X_struct.columns)
 
-# ----------------------------------------
 # CROSS VALIDATION
-# ----------------------------------------
 cv_scores = cross_val_score(
     RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1),
     X_struct, y, cv=5
@@ -92,9 +80,7 @@ cv_scores = cross_val_score(
 
 print(f"\n[CV] Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
-# ----------------------------------------
 # TRAIN TEST SPLIT
-# ----------------------------------------
 X_train_s, X_test_s, text_train, text_test, y_train, y_test = train_test_split(
     X_struct, texts, y,
     test_size=0.2,
@@ -102,9 +88,7 @@ X_train_s, X_test_s, text_train, text_test, y_train, y_test = train_test_split(
     stratify=y,
 )
 
-# ----------------------------------------
 # TF-IDF
-# ----------------------------------------
 tfidf = TFIDFFeatureExtractor(max_features=1200)
 
 X_train_text = tfidf.fit_transform(text_train.tolist()).toarray()
@@ -120,34 +104,26 @@ all_columns = struct_columns + tfidf_columns
 
 print(f"[INFO] Features: {len(all_columns)} (Struct: {len(struct_columns)}, TF-IDF: {len(tfidf_columns)})")
 
-# ----------------------------------------
 # SCALING
-# ----------------------------------------
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled  = scaler.transform(X_test)
 
-# ----------------------------------------
 # LOGISTIC REGRESSION
-# ----------------------------------------
 lr = LogisticRegression(max_iter=5000, class_weight="balanced", C=0.5, random_state=42)
 lr.fit(X_train_scaled, y_train)
 
 y_pred_lr = lr.predict(X_test_scaled)
 acc_lr = accuracy_score(y_test, y_pred_lr)
 
-# ----------------------------------------
 # RANDOM FOREST
-# ----------------------------------------
 rf = RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)
 rf.fit(X_train, y_train)
 
 y_pred_rf = rf.predict(X_test)
 acc_rf = accuracy_score(y_test, y_pred_rf)
 
-# ----------------------------------------
 # RESULTS
-# ----------------------------------------
 print("\n===== MODEL RESULTS =====")
 
 print("\n[Logistic Regression]")
@@ -156,9 +132,7 @@ print(f"Accuracy : {acc_lr:.4f}")
 print("\n[Random Forest]")
 print(f"Accuracy : {acc_rf:.4f}")
 
-# ----------------------------------------
 # BEST MODEL
-# ----------------------------------------
 if acc_rf >= acc_lr:
     best_model = rf
     model_name = "random_forest"
@@ -170,9 +144,7 @@ else:
 
 print(f"\n[INFO] Best model: {model_name}")
 
-# ----------------------------------------
 # SAVE
-# ----------------------------------------
 joblib.dump(best_model, f"{MODEL_DIR}/{model_name}.pkl")
 joblib.dump(all_columns, f"{MODEL_DIR}/feature_columns.pkl")
 tfidf.save(f"{MODEL_DIR}/tfidf_vectorizer.pkl")
