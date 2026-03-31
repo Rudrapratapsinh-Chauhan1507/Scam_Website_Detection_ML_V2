@@ -1,7 +1,6 @@
 import re
 from urllib.parse import urlparse, parse_qs
 
-
 # TLDs commonly abused in phishing / scam campaigns
 SUSPICIOUS_TLDS = {
     ".tk", ".ml", ".ga", ".cf", ".gq",  
