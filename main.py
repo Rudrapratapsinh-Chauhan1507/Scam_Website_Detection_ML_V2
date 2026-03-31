@@ -21,34 +21,34 @@ def collect(url: str, label: int | None = None) -> None:
 
     print(f"[INFO] Processing: {url}")
 
-    # 🔹 Scrape website
+    # Scrape website
     scraper = WebsiteScraper()
     data = scraper.scrape(url)
 
     if data["status"] == "failed":
         print(f"[WARN] Scraping failed: {data['error']}")
 
-    # 🔹 Extract features
+    # Extract features
     url_features = URLFeatureExtractor().extract(url)
     domain_features = DomainFeatureExtractor().extract(url)
     content_features = ContentFeatureExtractor().extract(
         data.get("title"),
         data.get("text"),
-        data.get("html")   # ✅ IMPORTANT FIX
+        data.get("html") 
     )
 
-    # 🔹 Store in DB
+    # Store in DB
     db.insert_website(url, data)
     db.update_url_features(url, url_features)
     db.update_domain_features(url, domain_features)
     db.update_content_features(url, content_features)
 
-    # 🔹 Save label if provided
+    # Save label if provided
     if label is not None:
         db.update_label(url, label)
         print(f"[INFO] Label saved: {label}")
 
-    # 🔹 Final status
+    # Final status
     if data["status"] == "success":
         print("[OK] Website scraped and stored successfully.")
     else:
@@ -62,13 +62,13 @@ def main() -> None:
                         help="Label (0 = legit, 1 = scam)")
     args = parser.parse_args()
 
-    # 🔹 URL input
+    # URL input
     url = args.url or input("Enter website URL: ").strip()
     if not url:
         print("[ERROR] No URL provided.", file=sys.stderr)
         sys.exit(1)
 
-    # 🔹 Label input
+    # Label input
     label = args.label
     if label is None:
         label_input = input("Enter label (0 = legit, 1 = scam, leave blank to skip): ").strip()
@@ -78,7 +78,7 @@ def main() -> None:
                 sys.exit(1)
             label = int(label_input)
 
-    # 🔹 Run pipeline
+    # Run pipeline
     collect(url, label)
 
 

@@ -41,10 +41,7 @@ class TFIDFFeatureExtractor:
         self._is_fitted = False
         self._feature_names = []
 
-    # ----------------------------------------
     # CORE METHODS
-    # ----------------------------------------
-
     def fit_transform(self, texts, as_dataframe: bool = False):
         """Fit the vectorizer on texts and return the feature matrix."""
         cleaned = self._clean(texts)
@@ -97,10 +94,7 @@ class TFIDFFeatureExtractor:
             )
         return matrix
 
-    # ----------------------------------------
     # CLEANING
-    # ----------------------------------------
-
     @staticmethod
     def _clean(texts) -> list[str]:
         """
@@ -123,10 +117,7 @@ class TFIDFFeatureExtractor:
             result.append(t if t else "empty_doc")
         return result
 
-    # ----------------------------------------
     # VALIDATION
-    # ----------------------------------------
-
     def _check_fitted(self):
         if not self._is_fitted:
             raise NotFittedError(
@@ -144,10 +135,7 @@ class TFIDFFeatureExtractor:
         self._check_fitted()
         return list(self._feature_names)
 
-    # ----------------------------------------
     # SAVE / LOAD
-    # ----------------------------------------
-
     def save(self, path: str):
         """Save the fitted vectorizer to disk."""
         self._check_fitted()
