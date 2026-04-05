@@ -76,18 +76,50 @@ def run_predict(url: str) -> dict:
     legit_boost = 0.0
     reasons     = []
 
-    # trust signals
-    trusted_domains = ['.edu', '.gov', '.ac.', '.org', '.mx']
-    is_trusted = any(td in domain for td in trusted_domains)
+    def is_high_trust_domain(domain):
+        return (
+            domain.endswith(".gov.in") or
+            domain.endswith(".edu.in") or
+            domain.endswith(".ac.in") or
+            domain.endswith(".ac.uk") or
+            domain.endswith(".edu") or
+            domain.endswith(".edu.mx") or
+            domain.endswith(".mx") or
+            domain.endswith(".pan.pl") or
+            domain.endswith(".ac") or
+            domain.endswith(".gov") or
+            domain.endswith(".edu.au")
+        )
+
+    is_trusted = is_high_trust_domain(domain)
 
     if is_trusted:
-        legit_boost += 0.40
-        reasons.append("Trusted domain")
+        legit_boost += 0.10
+        reasons.append("High-trust domain (gov/edu)")
 
-    age = features.get('domain_age_days', 0)
-    if age and age > 1000:
+    brand_keywords = ["icici", "sbi", "hdfc", "axis"]
+
+    official_domains = [
+        "icicibank.com",
+        "sbi.co.in",
+        "hdfcbank.com",
+        "axisbank.com"
+    ]
+
+    for brand in brand_keywords:
+        if brand in domain and not any(od in domain for od in official_domains):
+            scam_score += 0.40
+            reasons.append("Brand spoofing detected")
+
+    age = features.get('domain_age_days')
+
+    if age is None:
+        if not is_trusted:
+            scam_score += 0.15
+            reasons.append("Unknown domain age")
+
+    elif age > 1000:
         legit_boost += 0.05
-        reasons.append("Old domain")
 
     # shortened url
     is_short_url = False
@@ -123,8 +155,10 @@ def run_predict(url: str) -> dict:
         reasons.append("Free hosting domain")
 
     if features.get('https') == 0:
-        scam_score += 0.05
-        reasons.append("No HTTPS")
+        if not is_trusted:
+            scam_score += 0.05
+        else:
+            reasons.append("No HTTPS (trusted legacy site)")
 
     if features.get('url_length', 0) > 80:
         scam_score += 0.05
@@ -137,7 +171,7 @@ def run_predict(url: str) -> dict:
         reasons.append("Suspicious path keywords")
 
     # content signals
-    if features.get('scam_keyword_density', 0) > 0.05:
+    if features.get('scam_keyword_density', 0) > 0.05 and not is_trusted:
         scam_score += 0.15
         reasons.append("High scam keyword density")
 
@@ -151,10 +185,19 @@ def run_predict(url: str) -> dict:
 
     # final probability
     final_proba = (0.85 * base_proba) + scam_score - legit_boost
+
+    # Protect ML (only for non-trusted)
+    if base_proba > 0.85 and not is_trusted:
+        final_proba = max(final_proba, base_proba)
+
     final_proba = max(0.0, min(1.0, final_proba))
 
+    # Adjust for trusted domains
     if is_trusted:
-        final_proba = min(final_proba, 0.45)
+        final_proba -= 0.35
+        reasons.append("Adjusted for trusted academic/gov domain")
+
+        final_proba = min(final_proba, 0.65)
 
     # decision
     if is_short_url:
@@ -261,7 +304,7 @@ if HAS_CORS:
 
 @app.route("/", methods=["GET"])
 def index():
-    return send_from_directory(_FRONTEND, "index.html")
+    return send_from_directory(_FRONTEND, "index1.html")
 
 
 @app.route("/api/health", methods=["GET"])
