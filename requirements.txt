@@ -1,0 +1,38 @@
+# ============================================================
+# ScamShield — Scam Website Detection using ML & NLP
+# Python 3.12+
+# ============================================================
+
+# ── Web Scraping ─────────────────────────────────────────────
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+certifi>=2024.2.2
+urllib3>=2.2.0
+
+# ── Domain / DNS Intelligence ────────────────────────────────
+tldextract>=5.1.1
+
+# ── NLP ──────────────────────────────────────────────────────
+nltk>=3.8.1
+
+# ── Machine Learning ─────────────────────────────────────────
+scikit-learn>=1.4.0
+numpy>=1.26.0
+pandas>=2.2.0
+
+# ── Model Serialisation ──────────────────────────────────────
+joblib>=1.3.2
+
+# ── Web Framework (Flask API) ────────────────────────────────
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# ── Database ─────────────────────────────────────────────────
+mysql-connector-python>=8.3.0
+
+# ── Notebooks & Visualisation ────────────────────────────────
+jupyter>=1.0.0
+ipykernel>=6.29.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
