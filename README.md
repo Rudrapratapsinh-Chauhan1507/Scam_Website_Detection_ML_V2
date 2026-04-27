@@ -1,374 +1,340 @@
-# 🛡️ ScamShield — Scam Website Detection using ML & NLP
+# Scam Website Detection ML
 
-A full-stack machine learning system that detects scam and phishing websites in real time by combining **URL analysis**, **domain intelligence**, **NLP-based content analysis**, and a trained **Random Forest classifier**.
+This project detects whether a website URL is likely to be **legitimate** or **scam/phishing** using machine learning features extracted from the URL and, when available, page content.
 
----
+The current trained model is a calibrated **Extra Trees** classifier trained on a balanced 5000-row reference dataset.
 
-## 📌 Table of Contents
+## Current Status
 
-- [Overview](#overview)
-- [Project Structure](#project-structure)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Setup & Installation](#setup--installation)
-- [Database Configuration](#database-configuration)
-- [Usage](#usage)
-- [ML Pipeline](#ml-pipeline)
-- [API Endpoints](#api-endpoints)
-- [Feature Engineering](#feature-engineering)
-- [Model Details](#model-details)
-- [Dataset](#dataset)
+```text
+Dataset building:       ready
+Feature extraction:     ready
+Model training:         ready
+Saved model artifacts:  ready
+Real-site evaluation:   ready
+URL prediction CLI:     ready
+```
 
----
+Latest saved results:
 
-## Overview
-
-ScamShield analyses any website URL and returns a verdict — **SCAM 🚨**, **SUSPICIOUS ⚠️**, or **LEGIT ✅** — along with a confidence score and human-readable risk reasons.
-
-The system works by:
-1. Scraping the target website (with SSL fallback and redirect tracking)
-2. Extracting three feature groups: URL features, domain features, content/NLP features
-3. Running a pre-trained Random Forest model
-4. Applying rule-based post-processing (brand spoofing, hosting signals, trusted domains)
-5. Serving results via a Flask REST API with a responsive HTML/JS frontend
-
----
+```text
+Training rows:          5000
+Clean training columns: 36
+Model features:         35
+Best model:             extra_trees
+Probability calibrated: yes
+Real-site test:         43/43 correct
+```
 
 ## Project Structure
 
-```
-Scam_Website_Detection_ML/
-│
-├── main.py                      # CLI data collection pipeline
-├── build_ml_dataset.py          # Export labelled data from MySQL → CSV
-├── backfill_url_features.py     # Backfill URL features for existing records
-│
-├── train_model.ipynb            # Model training notebook (Random Forest + TF-IDF)
-├── final_predict_model.ipynb    # Full prediction pipeline notebook
-├── visual.ipynb                 # EDA and visualisation notebook
-│
-├── src/
-│   ├── scraper.py               # WebsiteScraper — fetches & parses HTML
-│   ├── url_features.py          # URLFeatureExtractor
-│   ├── domain_features.py       # DomainFeatureExtractor (WHOIS + SSL)
-│   ├── content_features.py      # ContentFeatureExtractor (NLP / keyword)
-│   ├── tfidf_vectorizer.py      # TFIDFFeatureExtractor (scikit-learn wrapper)
-│   └── database_mysql.py        # DatabaseManager (MySQL connection pool)
-│
-├── frontend/
-│   ├── app.py                   # Flask web application & prediction API
-│   ├── index.html               # Frontend UI (v1)
-│   └── index1.html              # Frontend UI (v2 — served by default)
-│
-├── pkl_models/
-│   ├── random_forest.pkl        # Trained Random Forest model
-│   ├── scaler.pkl               # StandardScaler for numeric features
-│   └── feature_columns.pkl      # Ordered feature column list
-│
-└── dataset/
-    ├── ml_project_dataset.csv        # Full labelled dataset
-    ├── ml_project_dataset_500.csv    # Sampled 500-row dataset
-    └── Scam_website_dataset.csv      # Raw scam URL dataset
+```text
+.
++-- dataset/
+|   +-- reference_training_dataset_5000.csv
+|   +-- reference_training_dataset_5000_clean.csv
+|   +-- real_site_prediction_results.csv
++-- pkl_models/
+|   +-- best_scam_detector.pkl
+|   +-- model_features.pkl
+|   +-- training_report.json
++-- src/
+|   +-- scraper.py
+|   +-- url_features.py
+|   +-- content_features.py
+|   +-- domain_features.py
+|   +-- database_mysql.py
++-- batch_test.py
++-- build_reference_dataset.py
++-- evaluate_real_sites.py
++-- export_dataset.py
++-- main.py
++-- predict.py
++-- train_model.py
++-- training_model.ipynb
++-- real_site_prediction_results.md
++-- requirements.txt
++-- README.md
 ```
 
----
+## Setup
 
-## Features
+Install the Python dependencies:
 
-### 🔗 URL Features (19 features)
-| Feature | Description |
-|---|---|
-| `url_length` | Total character length of the URL |
-| `num_dots` | Number of `.` characters |
-| `num_hyphen` | Number of `-` characters |
-| `num_slashes` | Number of `/` characters |
-| `num_digits` | Count of numeric digits in URL |
-| `https` | 1 if scheme is HTTPS, else 0 |
-| `subdomains` | Number of subdomain levels |
-| `has_at_symbol` | Presence of `@` in URL |
-| `has_ip` | IP address used instead of domain name |
-| `suspicious_tld` | TLD is in known-abused list (`.tk`, `.xyz`, etc.) |
-| `brand_in_url` | Brand name (PayPal, Google, etc.) in non-brand domain |
-| `is_shortened` | URL is from a shortening service (bit.ly, tinyurl, etc.) |
-| `suspicious_word_count` | Count of phishing keywords in URL |
-| `path_depth` | Depth of the URL path |
-| `num_query_params` | Number of query parameters |
-
-### 🌐 Domain Features (7 features)
-| Feature | Description |
-|---|---|
-| `domain_age_days` | Days since domain registration (via WHOIS) |
-| `domain_expiry_days` | Days until domain expiry |
-| `is_new_domain` | 1 if domain is less than 180 days old |
-| `short_expiry_domain` | 1 if domain expires within 180 days |
-| `has_ssl` | SSL certificate present |
-| `ssl_valid` | SSL certificate is valid |
-| `ssl_days_remaining` | Days until SSL certificate expiry |
-
-### 📄 Content / NLP Features (9 features)
-| Feature | Description |
-|---|---|
-| `text_length` | Character length of page body text |
-| `token_count` | Number of meaningful tokens (stopwords removed) |
-| `scam_keyword_count` | Count of scam/phishing keywords matched |
-| `scam_keyword_density` | Ratio of scam keywords to total tokens |
-| `has_form` | HTML `<form>` element present |
-| `has_iframe` | HTML `<iframe>` element present |
-| `exclamation_count` | Number of `!` characters in body text |
-| `caps_ratio` | Ratio of uppercase letters in body text |
-| `avg_word_length` | Average word length after tokenisation |
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Language | Python 3.12 |
-| ML | scikit-learn (Random Forest, TF-IDF) |
-| NLP | NLTK, scikit-learn TfidfVectorizer |
-| Web Scraping | requests, BeautifulSoup4, lxml, certifi |
-| Domain Intel | tldextract, system `whois`, Python `ssl` + `socket` |
-| Backend API | Flask, flask-cors |
-| Database | MySQL (mysql-connector-python, connection pooling) |
-| Model Serialisation | joblib |
-| Data Processing | pandas, numpy |
-| Visualisation | matplotlib, seaborn (in notebooks) |
-| Notebooks | Jupyter |
-
----
-
-## Setup & Installation
-
-### Prerequisites
-- Python 3.12+
-- MySQL 8.0+ (running locally)
-- `whois` command-line utility installed on the OS
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/your-username/Scam_Website_Detection_ML.git
-cd Scam_Website_Detection_ML
-```
-
-### 2. Create and activate a virtual environment
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-```
-
-### 3. Install dependencies
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
-### 4. Download NLTK data
-```python
-python -c "import nltk; nltk.download('stopwords')"
-```
-
----
-
-## Database Configuration
-
-The project uses a local MySQL database. Update credentials in `src/database_mysql.py` if needed (defaults shown below):
-
-```python
-host     = "localhost"
-user     = "root"
-password = ""
-database = "scam_website_detection"
-```
-
-Create the database and `websites` table before first run:
-
-```sql
-CREATE DATABASE scam_website_detection;
-USE scam_website_detection;
-
-CREATE TABLE websites (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    url VARCHAR(2048) NOT NULL UNIQUE,
-    title TEXT,
-    meta_description TEXT,
-    text_content LONGTEXT,
-    final_url VARCHAR(2048),
-    status VARCHAR(20),
-    error_message TEXT,
-    redirect_count INT DEFAULT 0,
-    scraped_at DATETIME,
-    label TINYINT,
-
-    -- URL features
-    url_length INT, num_dots INT, num_hyphen INT, num_slashes INT,
-    num_underscores INT, num_percent INT, num_digits INT,
-    https TINYINT, subdomains INT, has_at_symbol TINYINT,
-    has_double_slash TINYINT, has_ip TINYINT, num_query_params INT,
-    has_query TINYINT, path_depth INT, suspicious_tld TINYINT,
-    brand_in_url TINYINT, is_shortened TINYINT, suspicious_word_count INT,
-
-    -- Domain features
-    domain_age_days INT, domain_expiry_days INT, registrar VARCHAR(255),
-    has_ssl TINYINT, ssl_valid TINYINT, ssl_days_remaining INT,
-    is_new_domain TINYINT, short_expiry_domain TINYINT,
-
-    -- Content features
-    text_length INT, token_count INT, scam_keyword_count INT,
-    scam_keyword_density FLOAT, has_form TINYINT, has_iframe TINYINT,
-    exclamation_count INT, caps_ratio FLOAT, avg_word_length FLOAT
-);
-```
-
----
-
-## Usage
-
-### Run the Web Application (Recommended)
-
-```bash
-cd frontend
-python app.py
-```
-
-Then open your browser at: **http://localhost:5000**
-
-Enter any URL to get an instant scam verdict with feature breakdown.
-
----
-
-### Collect & Label Data via CLI
-
-```bash
-# Scrape and label a single URL
-python main.py --url https://example.com --label 0   # 0 = legit
-python main.py --url https://suspicious-site.tk --label 1  # 1 = scam
-
-# Interactive mode (prompts for URL and label)
-python main.py
-```
-
-### Export Dataset from Database
-
-```bash
-python build_ml_dataset.py
-# Output: dataset/ml_project_dataset.csv
-```
-
-### Train the Model
-
-Open and run `train_model.ipynb` in Jupyter:
-```bash
-jupyter notebook train_model.ipynb
-```
-
----
-
-## ML Pipeline
-
-```
-URL Input
-   │
-   ├──► URLFeatureExtractor       → 19 numeric features
-   ├──► DomainFeatureExtractor    → 7 numeric features (WHOIS + SSL)
-   ├──► WebsiteScraper            → HTML / text content
-   │         └──► ContentFeatureExtractor → 9 NLP features
-   │
-   ▼
-Feature Vector (35 features)
-   │
-   ├──► StandardScaler (normalisation)
-   ▼
-Random Forest Classifier
-   │
-   ▼
-Base ML Probability
-   │
-   ├──► Rule-based post-processing
-   │       (brand spoofing, trusted domains, hosting signals, path keywords)
-   ▼
-Final Confidence Score → LEGIT / SUSPICIOUS / SCAM
-```
-
----
-
-## API Endpoints
-
-All endpoints are served by `frontend/app.py` on port **5000**.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Serves the frontend UI |
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/predict` | Predict scam probability for a URL |
-| `GET` | `/api/history` | Returns last 20 predictions (in-memory) |
-
-### POST `/api/predict`
-
-**Request body:**
-```json
-{ "url": "https://example.com" }
-```
-
-**Response:**
-```json
-{
-  "label": "LEGIT",
-  "label_emoji": "✅ LEGIT",
-  "severity": "low",
-  "confidence": 0.23,
-  "base_ml_proba": 0.18,
-  "scam_score": 0.05,
-  "legit_boost": 0.0,
-  "domain": "example.com",
-  "final_url": "https://www.example.com",
-  "page_title": "Example Domain",
-  "scrape_status": "success",
-  "redirect_count": 1,
-  "reasons": [],
-  "url_features": { ... },
-  "domain_features": { ... },
-  "content_features": { ... },
-  "timestamp": "2026-04-06T10:30:00"
-}
-```
-
----
-
-## Model Details
-
-- **Algorithm:** Random Forest Classifier (scikit-learn)
-- **Input features:** 35 engineered features (URL + domain + content)
-- **Post-processing rules:** 15+ heuristic rules applied on top of base ML probability
-- **Verdicts:**
-  - `LEGIT` — final confidence < 0.60
-  - `SUSPICIOUS` — final confidence 0.60–0.79
-  - `SCAM` — final confidence ≥ 0.80
-- **Serialised artifacts:** `pkl_models/random_forest.pkl`, `pkl_models/scaler.pkl`, `pkl_models/feature_columns.pkl`
-
----
+The project expects Python 3.12+ based on the dependency file.
 
 ## Dataset
 
-Three CSV files are included under `dataset/`:
+The current training dataset files are:
 
-| File | Description |
-|---|---|
-| `ml_project_dataset.csv` | Full labelled dataset exported from MySQL |
-| `ml_project_dataset_500.csv` | Sampled 500-record subset for quick experiments |
-| `Scam_website_dataset.csv` | Raw scam URL collection used for initial labelling |
+```text
+dataset/reference_training_dataset_5000.csv
+dataset/reference_training_dataset_5000_clean.csv
+```
 
-Labels: `0` = Legitimate, `1` = Scam
+Dataset summary:
 
----
+```text
+Raw dataset:            5000 rows, 54 columns
+Clean dataset:          5000 rows, 36 columns
+Labels:                 2500 legitimate, 2500 scam
+Rows with reference text: 976
+URL/domain-only rows:   4024
+Scrape status:          not_scraped for all 5000 rows
+```
 
-## Notes
+The raw dataset was generated from reference CSV files under:
 
-- WHOIS lookups require the system `whois` tool to be installed (`sudo apt install whois` on Linux).
-- Domain feature extraction makes live network calls (WHOIS + SSL); set appropriate timeouts in production.
-- The `registrar` field from WHOIS is stored in the database but not used as an ML feature.
-- TF-IDF features are used during training but the saved Random Forest model uses the 35 engineered features only (no TF-IDF at inference time in the Flask app).
+```text
+C:\Users\lenovo\Desktop\Scam Prac
+```
+
+Command for the current dataset size:
+
+```powershell
+python build_reference_dataset.py --rows 5000 --output dataset\reference_training_dataset_5000.csv
+```
+
+Then `train_model.py` creates the clean dataset by removing metadata and keeping usable numerical feature columns.
+
+## Features Used
+
+The saved model currently uses 35 numerical features:
+
+```text
+url_length
+num_dots
+num_hyphen
+num_slashes
+https
+subdomains
+has_at_symbol
+has_double_slash
+has_ip
+num_underscores
+num_percent
+num_digits
+num_query_params
+has_query
+path_depth
+suspicious_tld
+brand_in_url
+is_shortened
+suspicious_word_count
+url_entropy
+hostname_length
+digit_letter_ratio
+num_special_chars
+tld_in_path
+longest_digit_run
+uses_free_hosting
+brand_on_free_hosting
+brand_domain_mismatch
+text_length
+token_count
+scam_keyword_count
+scam_keyword_density
+exclamation_count
+caps_ratio
+avg_word_length
+```
+
+The exact feature list is saved in:
+
+```text
+pkl_models/model_features.pkl
+```
+
+## Model Training
+
+Training can be run from the script:
+
+```powershell
+python train_model.py
+```
+
+Equivalent explicit command:
+
+```powershell
+python train_model.py --dataset dataset\reference_training_dataset_5000.csv --clean-output dataset\reference_training_dataset_5000_clean.csv
+```
+
+The project also includes `training_model.ipynb`, which records the training workflow in notebook form.
+
+Models compared during training:
+
+- Extra Trees
+- Random Forest
+- Gradient Boosting
+- SVC RBF
+- Logistic Regression
+
+The final model is selected using cross-validated F1 score. The selected model is then optionally calibrated with isotonic probability calibration, which is enabled by default.
+
+## Training Results
+
+Saved report:
+
+```text
+pkl_models/training_report.json
+```
+
+Best model:
+
+```text
+extra_trees
+```
+
+Cross-validation results:
+
+```text
+Extra Trees:         F1 0.9546, ROC AUC 0.9909, Accuracy 0.9550
+Random Forest:       F1 0.9538, ROC AUC 0.9902, Accuracy 0.9540
+Gradient Boosting:   F1 0.9528, ROC AUC 0.9898, Accuracy 0.9533
+SVC RBF:             F1 0.9452, ROC AUC 0.9872, Accuracy 0.9460
+Logistic Regression: F1 0.9336, ROC AUC 0.9842, Accuracy 0.9343
+```
+
+Holdout performance:
+
+```text
+Accuracy:  0.9670
+Precision: 0.9736
+Recall:    0.9600
+F1:        0.9668
+ROC AUC:   0.9941
+```
+
+Saved artifacts:
+
+```text
+pkl_models/best_scam_detector.pkl
+pkl_models/model_features.pkl
+pkl_models/training_report.json
+```
+
+## Why Extra Trees Was Selected
+
+Extra Trees performs well for this project because the model learns from structured numerical features: URL length, entropy, suspicious words, domain flags, text statistics, and other tabular signals.
+
+Tree-based models can learn feature interactions such as:
+
+```text
+High URL entropy + suspicious TLD -> higher scam risk
+Free hosting + brand mismatch -> higher scam risk
+Long hostname + many digits -> higher scam risk
+Scam keywords in content -> higher scam risk
+```
+
+This makes Extra Trees a better fit than a simple linear model for the current feature set.
+
+## Real-Site Evaluation
+
+Run evaluation against known legitimate sites and fresh scam/phishing feeds:
+
+```powershell
+python evaluate_real_sites.py --legit-count 23 --scam-count 20 --timeout 5
+```
+
+Latest saved real-site result:
+
+```text
+Total: 43/43 correct
+Legit: 23/23 correct
+Scam:  20/20 correct
+```
+
+Reports:
+
+```text
+real_site_prediction_results.md
+dataset/real_site_prediction_results.csv
+```
+
+The scam URLs are pulled from OpenPhish first, then URLhaus if more samples are needed. Scam page content scraping is disabled by default for safer evaluation; URL features are still extracted.
+
+## Predict Any URL
+
+Predict a single URL:
+
+```powershell
+python predict.py --url https://example.com
+```
+
+Predict with a custom scraping timeout:
+
+```powershell
+python predict.py --url https://example.com --timeout 5
+```
+
+Predict multiple URLs from a text file:
+
+```powershell
+python predict.py --input urls.txt
+```
+
+Predict from a CSV file with a `url` column and save results:
+
+```powershell
+python predict.py --input urls.csv --output dataset\predictions.csv
+```
+
+Output includes:
+
+```text
+URL
+Final URL after redirects
+Scrape status
+Prediction: LEGIT or SCAM
+Confidence
+Scam probability
+Selected feature values
+```
+
+## Other Scripts
+
+`build_reference_dataset.py`
+
+Builds a balanced training CSV from the local reference datasets.
+
+`train_model.py`
+
+Cleans the dataset, compares candidate models, saves the best calibrated model, saves the feature list, and writes `training_report.json`.
+
+`evaluate_real_sites.py`
+
+Tests the saved model against legitimate websites and scam/phishing feeds.
+
+`predict.py`
+
+Predicts one URL, a text file of URLs, or a CSV of URLs.
+
+`export_dataset.py`
+
+Exports labeled website records from MySQL into a CSV dataset.
+
+`main.py`
+
+Collects website data, extracts URL/domain/content features, and stores records in MySQL.
+
+`batch_test.py`
+
+Runs a small manually defined batch of URLs and writes a markdown report.
+
+## Important Notes
+
+Predictions should be treated as **risk scores**, not absolute truth. Legitimate websites can sometimes look suspicious, and phishing sites change quickly.
+
+Recommended report wording:
+
+```text
+The model performs well on the prepared dataset and current real-site sample
+testing, achieving 43/43 correct predictions in the latest saved evaluation.
+However, phishing patterns and legitimate website structures vary, so model
+outputs should be treated as risk scores rather than absolute truth.
+```
+
