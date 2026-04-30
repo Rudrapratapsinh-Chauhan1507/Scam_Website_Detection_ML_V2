@@ -3,190 +3,217 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ScamShield Dashboard</title>
+    <title>ScamShield Enterprise Risk Console</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   </head>
   <body>
-    <main class="shell">
-      <nav class="topbar" aria-label="Dashboard navigation">
-        <div class="brand-mark">SS</div>
-        <div>
-          <strong>ScamShield Console</strong>
-          <span>Real-time website risk intelligence</span>
-        </div>
-      </nav>
-
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">ML scam website detection</p>
-          <h1>ScamShield</h1>
-          <p class="subtitle">End-to-end URL risk analysis with calibrated probability scoring, feature inspection, and live reliability context.</p>
-        </div>
-        <div class="model-strip" aria-label="Model performance summary">
+    <main class="ops-shell">
+      <header class="app-header">
+        <div class="brand-lockup">
+          <div class="brand-symbol" aria-hidden="true"></div>
           <div>
-            <span>Model</span>
-            <strong>{{ model_summary.best_model|replace('_', ' ')|title }}</strong>
+            <strong>ScamShield</strong>
+            <span>Enterprise URL Risk Console</span>
           </div>
+        </div>
+
+        <nav class="workspace-tabs" aria-label="Primary workspace">
+          <button class="nav-link active" data-page="single" type="button">Live Scan</button>
+          <button class="nav-link" data-page="analytics" type="button">Model Health</button>
+          <button class="nav-link" data-page="batch" type="button">Bulk Review</button>
+          <button class="nav-link" data-page="logs" type="button">Case History</button>
+          <button class="nav-link" data-page="simulator" type="button">URL Lab</button>
+        </nav>
+      </header>
+
+      <section class="command-hero">
+        <div class="hero-copy">
+          <p class="eyebrow">End-to-End Scam Website Detection</p>
+          <h1>Scam Website Detection Using Live Crawling and ML-Based Risk Analysis</h1>
+        </div>
+        <div class="system-metrics" aria-label="System metrics">
           <div>
-            <span>Features</span>
-            <strong>{{ model_summary.feature_count }}</strong>
+            <span>Detector</span>
+            <strong>{{ model_summary.best_model|replace('_', ' ')|title }}</strong>
           </div>
           <div>
             <span>Accuracy</span>
             <strong>{{ "%.1f"|format((model_summary.holdout.accuracy or 0) * 100) }}%</strong>
           </div>
           <div>
-            <span>ROC AUC</span>
-            <strong>{{ "%.3f"|format(model_summary.holdout.roc_auc or 0) }}</strong>
+            <span>Signals</span>
+            <strong>{{ model_summary.feature_count }}</strong>
+          </div>
+          <div>
+            <span>Training Rows</span>
+            <strong>{{ model_summary.rows or "n/a" }}</strong>
           </div>
         </div>
       </section>
 
-      <section class="overview-grid" aria-label="Project overview">
-        <div class="overview-card">
-          <span>Calibrated output</span>
-          <strong>{{ "Yes" if model_summary.calibrated else "No" }}</strong>
-        </div>
-        <div class="overview-card">
-          <span>Training rows</span>
-          <strong>{{ model_summary.rows or "n/a" }}</strong>
-        </div>
-        <div class="overview-card">
-          <span>Holdout F1</span>
-          <strong>{{ "%.1f"|format((model_summary.holdout.f1 or 0) * 100) }}%</strong>
-        </div>
-        <div class="overview-card">
-          <span>Feature families</span>
-          <strong>URL + Content</strong>
-        </div>
-      </section>
+      <section class="page active" id="page-single">
+        <div class="scan-workbench">
+          <section class="intake-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Threat Intake</p>
+              <h2>Submit URL for analysis</h2>
+            </div>
 
-      <section class="workspace">
-        <aside class="panel scan-panel">
-          <div class="panel-heading">
-            <p class="eyebrow">Live scan</p>
-            <h2>Check a website</h2>
-          </div>
-          <form id="scanForm" class="scan-form">
-            <label for="urlInput">Website URL</label>
-            <div class="input-row">
-              <input id="urlInput" name="url" type="text" placeholder="https://example.com" autocomplete="url" required>
-              <button type="submit" id="scanButton">Analyze</button>
-            </div>
-            <div class="form-options">
-              <label for="timeoutInput">Timeout</label>
-              <input id="timeoutInput" type="range" min="2" max="20" value="6">
-              <output id="timeoutValue">6s</output>
-            </div>
-          </form>
-
-          <div class="examples" aria-label="Example URLs">
-            <button type="button" data-url="https://www.google.com">Google</button>
-            <button type="button" data-url="https://www.paypal.com">PayPal</button>
-            <button type="button" data-url="paypal-login-verify-account.xyz">Suspicious sample</button>
-          </div>
-
-          <div class="status-box" id="statusBox">
-            <span class="status-dot"></span>
-            <span>Model loaded. Ready for analysis.</span>
-          </div>
-        </aside>
-
-        <section class="results">
-          <div class="verdict-card" id="verdictCard">
-            <div class="verdict-main">
-              <p class="eyebrow">Prediction</p>
-              <h2 id="predictionLabel">No scan yet</h2>
-              <p id="finalUrl">Enter a URL to inspect risk signals.</p>
-            </div>
-            <div class="score-ring" id="scoreRing" style="--score: 0">
-              <span id="scoreValue">0%</span>
-              <small>scam risk</small>
-            </div>
-          </div>
-
-          <div class="metrics-grid">
-            <div class="metric">
-              <span>Confidence</span>
-              <strong id="confidenceValue">--</strong>
-            </div>
-            <div class="metric">
-              <span>Risk band</span>
-              <strong id="riskBand">--</strong>
-            </div>
-            <div class="metric">
-              <span>Scrape status</span>
-              <strong id="scrapeStatus">--</strong>
-            </div>
-            <div class="metric">
-              <span>Text length</span>
-              <strong id="textLength">--</strong>
-            </div>
-          </div>
-
-          <section class="insight-layout">
-            <div class="panel chart-panel">
-              <div class="panel-heading">
-                <p class="eyebrow">Risk radar</p>
-                <h2>Signal balance</h2>
+            <form id="scanForm" class="scan-form">
+              <label for="urlInput">Website or link</label>
+              <div class="scan-row">
+                <input id="urlInput" name="url" type="text" placeholder="https://secure-account-review.example" autocomplete="url" required>
+                <button type="submit" id="scanButton">Run Scan</button>
               </div>
-              <canvas id="riskRadar" width="360" height="300" aria-label="Risk radar chart"></canvas>
+
+              <div class="timeout-control">
+                <label for="timeoutInput">Crawler timeout</label>
+                <input id="timeoutInput" type="range" min="2" max="20" value="6">
+                <output id="timeoutValue">6s</output>
+              </div>
+            </form>
+
+            <div class="quick-tests" aria-label="Sample inputs">
+              <button type="button" data-url="https://www.google.com">Safe baseline</button>
+              <button type="button" data-url="https://www.paypal.com">Official payment</button>
+              <button type="button" data-url="paypal-login-verify-account.xyz">High-risk sample</button>
             </div>
 
-            <div class="panel driver-panel">
-              <div class="panel-heading">
-                <p class="eyebrow">Insights</p>
-                <h2>Top drivers</h2>
-              </div>
-              <div class="driver-list" id="driverList"></div>
-              <div class="notes-list" id="notesList"></div>
+            <div class="status-box" id="statusBox">
+              <span class="status-dot"></span>
+              <span>System ready.</span>
+            </div>
+
+            <div class="pipeline">
+              <div><span>1</span><strong>Normalize</strong></div>
+              <div><span>2</span><strong>Crawl</strong></div>
+              <div><span>3</span><strong>Extract</strong></div>
+              <div><span>4</span><strong>Score</strong></div>
             </div>
           </section>
 
-          <div class="panel">
+          <section class="decision-panel">
+            <div class="verdict-card" id="verdictCard">
+              <div>
+                <p class="eyebrow">ML Decision</p>
+                <h2 id="predictionLabel">Awaiting scan</h2>
+                <p id="finalUrl">No URL has been analyzed in this session.</p>
+              </div>
+              <div class="score-ring" id="scoreRing" style="--score: 0">
+                <span id="scoreValue">0%</span>
+                <small>risk</small>
+              </div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric"><span>Confidence</span><strong id="confidenceValue">--</strong></div>
+              <div class="metric"><span>Risk Band</span><strong id="riskBand">--</strong></div>
+              <div class="metric"><span>Crawl State</span><strong id="scrapeStatus">--</strong></div>
+              <div class="metric"><span>Page Text</span><strong id="textLength">--</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="evidence-grid">
+          <div class="panel chart-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Signal Profile</p>
+              <h3>Feature family distribution</h3>
+            </div>
+            <canvas id="riskRadar" width="380" height="300" aria-label="Risk radar chart"></canvas>
+          </div>
+
+          <div class="panel driver-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Evidence Stack</p>
+              <h3>Top model drivers</h3>
+            </div>
+            <div class="driver-list" id="driverList"></div>
+            <div class="notes-list" id="notesList"></div>
+          </div>
+
+          <div class="panel signal-panel">
             <div class="panel-heading inline-heading">
               <div>
-                <p class="eyebrow">Signals</p>
-                <h2>Feature evidence</h2>
+                <p class="eyebrow">Observed Signals</p>
+                <h3>URL and page indicators</h3>
               </div>
-              <button type="button" id="previewButton" class="ghost-button">URL features</button>
+              <button type="button" id="previewButton" class="ghost-button">Feature Table</button>
             </div>
             <div class="signals-grid" id="signalsGrid"></div>
           </div>
-
-          <div class="panel feature-panel" id="featurePanel" hidden>
-            <div class="panel-heading">
-              <p class="eyebrow">Model input</p>
-              <h2>URL-only feature preview</h2>
-            </div>
-            <div class="feature-table" id="featureTable"></div>
-          </div>
         </section>
+
+        <div class="panel feature-panel" id="featurePanel" hidden>
+          <div class="panel-heading">
+            <p class="eyebrow">Feature Audit</p>
+            <h3>Model input values</h3>
+          </div>
+          <div class="feature-table" id="featureTable"></div>
+        </div>
       </section>
 
-      <section class="lower-grid">
-        <div class="panel">
-          <div class="panel-heading">
-            <p class="eyebrow">Recent scans</p>
-            <h2>Session history</h2>
+      <section class="page" id="page-analytics">
+        <div class="section-heading">
+          <p class="eyebrow">Model Health</p>
+          <h2>Production readiness metrics</h2>
+        </div>
+        <div class="analytics-grid">
+          <div class="kpi-card"><span>Accuracy</span><strong>{{ "%.1f"|format((model_summary.holdout.accuracy or 0) * 100) }}%</strong></div>
+          <div class="kpi-card"><span>Precision</span><strong>{{ "%.1f"|format((model_summary.holdout.precision or 0) * 100) }}%</strong></div>
+          <div class="kpi-card"><span>Recall</span><strong>{{ "%.1f"|format((model_summary.holdout.recall or 0) * 100) }}%</strong></div>
+          <div class="kpi-card"><span>ROC AUC</span><strong>{{ "%.3f"|format(model_summary.holdout.roc_auc or 0) }}</strong></div>
+        </div>
+        <div class="model-grid">
+          <div><strong>URL intelligence</strong><span>Lexical structure, entropy, special characters, path depth, and query pressure.</span></div>
+          <div><strong>Host reputation</strong><span>TLD risk, subdomain depth, free hosting, IP hosts, and domain shape.</span></div>
+          <div><strong>Brand impersonation</strong><span>Brand terms, domain mismatch, and hosted-brand abuse patterns.</span></div>
+          <div><strong>Content pressure</strong><span>Scam keywords, urgency language, capitalization, and page text density.</span></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-batch">
+        <div class="section-heading">
+          <p class="eyebrow">Bulk Review</p>
+          <h2>Queue multiple URLs</h2>
+        </div>
+        <div class="panel batch-panel">
+          <textarea id="batchInput" rows="8" placeholder="https://example.com&#10;paypal-login-verify-account.xyz"></textarea>
+          <div class="batch-actions">
+            <button type="button" id="batchButton">Scan List</button>
+            <button type="button" class="ghost-button" id="clearBatchButton">Clear</button>
           </div>
-          <div class="history-list" id="historyList">
+          <div class="batch-table" id="batchTable"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-logs">
+        <div class="section-heading">
+          <p class="eyebrow">Case History</p>
+          <h2>Session audit trail</h2>
+        </div>
+        <div class="panel">
+          <div class="history-list audit-list" id="historyList">
             <p class="empty-state">Scans will appear here during this Flask session.</p>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-heading">
-            <p class="eyebrow">Training report</p>
-            <h2>Current model health</h2>
+      </section>
+
+      <section class="page" id="page-simulator">
+        <div class="section-heading">
+          <p class="eyebrow">URL Lab</p>
+          <h2>Mutation risk analysis</h2>
+        </div>
+        <div class="sandbox-layout">
+          <div class="panel lab-controls">
+            <label for="simUrl">Base URL</label>
+            <input id="simUrl" class="wide-input" value="https://www.example.com/login">
+            <label for="simKeyword">Suspicious phrase</label>
+            <input id="simKeyword" class="wide-input" value="verify-account">
+            <button type="button" id="simButton">Generate Variants</button>
           </div>
-          <div class="report-grid">
-            <div><span>Precision</span><strong>{{ "%.1f"|format((model_summary.holdout.precision or 0) * 100) }}%</strong></div>
-            <div><span>Recall</span><strong>{{ "%.1f"|format((model_summary.holdout.recall or 0) * 100) }}%</strong></div>
-            <div><span>F1 score</span><strong>{{ "%.1f"|format((model_summary.holdout.f1 or 0) * 100) }}%</strong></div>
-            <div><span>Rows</span><strong>{{ model_summary.rows or "n/a" }}</strong></div>
-          </div>
-          <div class="quality-meter" aria-label="Model quality score">
-            <span style="--quality: {{ ((model_summary.holdout.roc_auc or 0) * 100)|round|int }}"></span>
+          <div class="panel sim-results" id="simResults">
+            <p class="empty-state">Variant scores will appear here.</p>
           </div>
         </div>
       </section>

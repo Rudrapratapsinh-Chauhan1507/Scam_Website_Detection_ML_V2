@@ -222,6 +222,43 @@ def _predict_with_features(
     }
 
 
+def _predict_from_feature_dict(raw_url: str, features: dict, status: str = "url_only") -> dict:
+    _load_artifacts()
+    url = normalize_url(raw_url)
+    feature_frame = build_feature_frame(_feature_columns or [], features)
+    if hasattr(_model, "predict_proba"):
+        probabilities = _model.predict_proba(feature_frame)[0]
+        scam_probability = float(probabilities[1])
+    else:
+        scam_probability = float(_model.predict(feature_frame)[0])
+
+    prediction = int(scam_probability >= 0.5)
+    prediction_name = "SCAM" if prediction == 1 else "LEGIT"
+    confidence = scam_probability if prediction == 1 else 1.0 - scam_probability
+    model_features = feature_frame.iloc[0].fillna(0).to_dict()
+
+    result = {
+        "url": url,
+        "final_url": url,
+        "status": status,
+        "error": None,
+        "prediction": prediction_name,
+        "prediction_label": prediction,
+        "confidence": round(confidence, 4),
+        "scam_probability": round(scam_probability, 4),
+        "text_length": features.get("text_length", 0),
+        "url_length": features.get("url_length", 0),
+        "suspicious_tld": features.get("suspicious_tld", 0),
+        "suspicious_word_count": features.get("suspicious_word_count", 0),
+        "scam_keyword_count": features.get("scam_keyword_count", 0),
+        "model_features": model_features,
+    }
+    result["risk_band"] = _risk_band(scam_probability)
+    result["signals"] = _signal_cards(result)
+    result["insights"] = _feature_insights(model_features, result)
+    return result
+
+
 def _safe_predict(raw_url: str, timeout: int) -> tuple[dict, int]:
     _load_artifacts()
     url = normalize_url(raw_url)
@@ -315,6 +352,23 @@ def feature_preview_api():
             "features": frame.iloc[0].fillna(0).to_dict(),
         }
     )
+
+
+@app.post("/api/url-predict")
+def url_predict_api():
+    payload = request.get_json(silent=True) or {}
+    url = normalize_url(str(payload.get("url", "")))
+    if not url:
+        return jsonify({"error": "Please enter a valid URL."}), 400
+
+    try:
+        features = URLFeatureExtractor().extract(url)
+        features.update(ContentFeatureExtractor().extract(title="", text="", html=""))
+        result = _predict_from_feature_dict(url, features)
+    except Exception as exc:
+        return jsonify({"error": f"URL-only prediction failed: {exc}"}), 500
+
+    return jsonify(result)
 
 
 if __name__ == "__main__":
