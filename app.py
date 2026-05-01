@@ -373,5 +373,5 @@ def url_predict_api():
 
 if __name__ == "__main__":
     _load_artifacts()
-    port = int(os.environ.get("PORT", "5000"))
+    port = int(os.environ.get("PORT", "5001"))
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
