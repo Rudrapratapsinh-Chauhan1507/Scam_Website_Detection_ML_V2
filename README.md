@@ -64,7 +64,7 @@ python app.py
 Open:
 
 ```text
-http://127.0.0.1:5000
+http://127.0.0.1:5001
 ```
 
 Important: `app.py` currently runs with `debug=False`. If you edit `templates/index.html`, restart the Flask server to see your template changes. If CSS or JavaScript changes do not appear, hard refresh the browser with `Ctrl + F5`.
@@ -86,7 +86,7 @@ POST /api/url-predict  URL-only prediction for fast simulations
 Example prediction request:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:5000/api/predict -ContentType "application/json" -Body '{"url":"https://example.com","timeout":6}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:5001/api/predict -ContentType "application/json" -Body '{"url":"https://example.com","timeout":6}'
 ```
 
 Prediction output includes:
